@@ -1,52 +1,90 @@
 pipeline {
     agent any
+    
     stages {
-
         stage('Build') {
             steps {
                 echo "Building the war"
             }
         }
 
-        stage("Deploy to QA") {
+        stage('Deploy to QA') {
             steps {
                 echo "Deploying to QA"
             }
         }
 
-        stage('Checkout') {
-            steps {
-                git url: 'https://github.com/Vivek-Ramteke-28/APIPostmanCollection'
+        stage('Pull Docker Images') {
+            parallel {
+                stage('Pull GoRest Image') {
+                    steps {
+                        bat 'docker pull vivekramteke/vrgorestddtest:1.0'
+                    }
+                }
+                
+                stage('Pull Booking Image') {
+                    steps {
+                        bat 'docker pull vivekramteke/mybookingapi:1.0'
+                    }
+                }
             }
         }
 
-        stage('Pull Docker Image') {
+        stage('Prepare Newman Results Directory') {
             steps {
-                bat 'docker pull vivekramteke/vrgorestddtest:1.0'
+                bat 'mkdir "newman"'
             }
         }
 
-        stage('Run API Test Cases') {
-            steps {
-                bat 'docker run -v %cd%\\newman:/app/results vivekramteke/vrgorestddtest:1.0'
+        stage('Run API Test Cases in Parallel') {
+            parallel {
+                stage('Run GoRest Tests') {
+                    steps {
+                        bat 'docker run --rm -v %cd%\\newman:/app/results vivekramteke/vrgorestddtest:1.0'
+                    }
+                }
+                
+                stage('Run Booking Tests') {
+                    steps {
+                        bat 'docker run --rm -v %cd%\\newman:/app/results vivekramteke/mybookingapi:1.0'
+                    }
+                }
             }
         }
 
-        stage('Publish HTML Extra Report') {
-            steps {
-                publishHTML([
-                    allowMissing: false,
-                    alwaysLinkToLastBuild: false,
-                    keepAll: true,
-                    reportDir: 'newman',
-                    reportFiles: 'gorest.html',
-                    reportName: 'HTML Extra API Report',
-                    reportTitles: ''
-                ])
+        stage('Publish HTML Extra Reports') {
+            parallel {
+                stage('Publish GoRest Report') {
+                    steps {
+                        publishHTML([
+                            allowMissing: false,
+                            alwaysLinkToLastBuild: false,
+                            keepAll: true,
+                            reportDir: 'newman',
+                            reportFiles: 'gorest.html',
+                            reportName: 'GoRest API Report',
+                            reportTitles: ''
+                        ])
+                    }
+                }
+                
+                stage('Publish Booking Report') {
+                    steps {
+                        publishHTML([
+                            allowMissing: false,
+                            alwaysLinkToLastBuild: false,
+                            keepAll: true,
+                            reportDir: 'newman',
+                            reportFiles: 'booking.html',
+                            reportName: 'Booking API Report',
+                            reportTitles: ''
+                        ])
+                    }
+                }
             }
         }
 
-        stage("Deploy to PROD") {
+        stage('Deploy to PROD') {
             steps {
                 echo "Deploying to PROD"
             }
